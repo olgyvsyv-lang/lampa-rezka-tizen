@@ -277,7 +277,7 @@
                         if (v.status) parts.push('HTTP ' + v.status);
                         if (v.statusText) parts.push(v.statusText);
                         if (v.message) parts.push(v.message);
-                        if (v.responseText) parts.push(String(v.responseText).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').slice(0, 180));
+                        if (v.responseText) parts.push(String(v.responseText).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 180));
                         return parts.join(': ') || JSON.stringify(v).slice(0, 180);
                     } catch (e) { return String(v); }
                 }
