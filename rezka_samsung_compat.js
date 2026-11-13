@@ -1,5 +1,5 @@
 /*!
- * HDREZKA plugin for Lampa — v1.1.1
+ * HDREZKA plugin for Lampa — v1.1.2
  * --------------------------------------------------------
  * Changes vs 1.0.1:
  *  - authenticate()  : rewritten to Lampa.Reguest (no raw XHR, CORS-safe)
@@ -24,7 +24,7 @@
      * ==================================================== */
     var manifest = {
         type:        'video',
-        version:     '1.1.0',
+        version:     '1.1.2',
         name:        'HDREZKA',
         description: 'Просмотр фильмов и сериалов с HDREZKA по личному аккаунту',
         component:   'rezka_online'
@@ -268,9 +268,22 @@
                     cb(false, msg || 'Не удалось войти');
                 }
             },
-            function (a) {
-                var errMsg = (typeof a === 'string' && a) ? a : 'Сетевая ошибка';
-                Lampa.Storage.set(STORAGE.status, 'error:network');
+            function (a, b) {
+                function describe(v) {
+                    if (v === null || v === undefined) return '';
+                    if (typeof v === 'string') return v;
+                    try {
+                        var parts = [];
+                        if (v.status) parts.push('HTTP ' + v.status);
+                        if (v.statusText) parts.push(v.statusText);
+                        if (v.message) parts.push(v.message);
+                        if (v.responseText) parts.push(String(v.responseText).replace(/<[^>]*>/g, ' ').replace(/\\s+/g, ' ').slice(0, 180));
+                        return parts.join(': ') || JSON.stringify(v).slice(0, 180);
+                    } catch (e) { return String(v); }
+                }
+                var detail = describe(a) || describe(b) || 'сервер не ответил';
+                var errMsg = 'Не удалось подключиться к ' + getDomain() + ' — ' + detail;
+                Lampa.Storage.set(STORAGE.status, 'error:network: ' + detail.slice(0, 100));
                 cb(false, errMsg);
             },
             post,
