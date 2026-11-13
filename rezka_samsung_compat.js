@@ -74,19 +74,20 @@
     }
 
     function buildHeaders(extra) {
+        // Browser XHR forbids User-Agent, Cookie and Referer. Custom
+        // X-Requested-With also triggers a CORS preflight that HDRezka
+        // mirrors may not allow. Keep only CORS-safelisted headers.
         var headers = {
-            'User-Agent':        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept':            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language':   'ru,en;q=0.9',
-            'Referer':           getDomain() + '/',
-            'X-Requested-With':  'XMLHttpRequest'
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'ru,en;q=0.9'
         };
-        // Manual cookie from settings — fallback for platforms where cookie-jar doesn't persist
-        var ck = getCookie();
-        if (ck) headers['Cookie'] = ck;
         if (extra) {
             for (var k in extra) {
-                if (Object.prototype.hasOwnProperty.call(extra, k)) {
+                if (Object.prototype.hasOwnProperty.call(extra, k) &&
+                    k.toLowerCase() !== 'user-agent' &&
+                    k.toLowerCase() !== 'cookie' &&
+                    k.toLowerCase() !== 'referer' &&
+                    k.toLowerCase() !== 'x-requested-with') {
                     headers[k] = extra[k];
                 }
             }
