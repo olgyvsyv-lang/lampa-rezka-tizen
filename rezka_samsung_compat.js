@@ -1,5 +1,5 @@
 /*!
- * HDREZKA plugin for Lampa — v1.1.2
+ * HDREZKA plugin for Lampa — v1.2.0
  * --------------------------------------------------------
  * Changes vs 1.0.1:
  *  - authenticate()  : rewritten to Lampa.Reguest (no raw XHR, CORS-safe)
@@ -240,58 +240,74 @@
      *    Settings → "Cookie (вручную)".
      * ==================================================== */
     function authenticate(login, password, cb) {
-        var url  = proxify(getDomain() + '/ajax/login/?t=' + Date.now());
-        var post = 'login_name='     + encodeURIComponent(login) +
-                   '&login_password=' + encodeURIComponent(password) +
-                   '&login_not_save=0';
+        var domain = getDomain();
+        var probe = new Lampa.Reguest();
 
-        var net = new Lampa.Reguest();
-        net.timeout(20000);
-        net.silent(
-            url,
-            function (resp) {
-                var ok = false, msg = '';
-                try {
-                    var json = (typeof resp === 'object' && resp !== null)
-                        ? resp
-                        : JSON.parse(resp);
-                    ok  = !!json.success;
-                    msg = json.message || '';
-                } catch (e) {
-                    msg = 'Некорректный ответ сервера';
-                }
-                if (ok) {
-                    Lampa.Storage.set(STORAGE.status, 'logged');
-                    cb(true, 'Успешный вход' + (msg ? ': ' + msg : ''));
-                } else {
-                    Lampa.Storage.set(STORAGE.status, 'error:' + (msg || 'login failed'));
-                    cb(false, msg || 'Не удалось войти');
-                }
-            },
-            function (a, b) {
-                function describe(v) {
-                    if (v === null || v === undefined) return '';
-                    if (typeof v === 'string') return v;
-                    try {
-                        var parts = [];
-                        if (v.status) parts.push('HTTP ' + v.status);
-                        if (v.statusText) parts.push(v.statusText);
-                        if (v.message) parts.push(v.message);
-                        if (v.responseText) parts.push(String(v.responseText).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').slice(0, 180));
-                        return parts.join(': ') || JSON.stringify(v).slice(0, 180);
-                    } catch (e) { return String(v); }
-                }
-                var detail = describe(a) || describe(b) || 'сервер не ответил';
-                var errMsg = 'Не удалось подключиться к ' + getDomain() + ' — ' + detail;
-                Lampa.Storage.set(STORAGE.status, 'error:network: ' + detail.slice(0, 100));
-                cb(false, errMsg);
-            },
-            post,
-            {
-                dataType: 'text',   // parse manually above — safer across Lampa builds
-                headers:  buildHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' })
+        function finish(ok, message, status) {
+            Lampa.Storage.set(STORAGE.status, status || (ok ? 'logged' : 'error:network'));
+            cb(ok, message);
+        }
+
+        function responseHint(value) {
+            var raw = typeof value === 'string' ? value : '';
+            if (!raw && value && typeof value === 'object') {
+                try { raw = JSON.stringify(value); } catch (e) {}
             }
-        );
+            var title = raw.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+            var clean = (title ? title[1] : raw.replace(/<[^>]*>/g, ' '))
+                .replace(/&nbsp;|&#160;/gi, ' ')
+                .replace(/\\s+/g, ' ').trim().slice(0, 150);
+            if (/cloudflare|just a moment|checking your browser|captcha|verify you are human|проверка браузера|подтвердите, что вы не робот/i.test(raw)) {
+                return 'Сайт показал проверку браузера/антибота';
+            }
+            return clean || 'пустой ответ сервера';
+        }
+
+        function sendLogin() {
+            var url = proxify(domain + '/ajax/login/?t=' + Date.now());
+            var post = 'login_name=' + encodeURIComponent(login) +
+                       '&login_password=' + encodeURIComponent(password) +
+                       '&login_not_save=0';
+            var net = new Lampa.Reguest();
+            net.timeout(20000);
+            net.silent(url, function (resp) {
+                var json;
+                try {
+                    json = (typeof resp === 'object' && resp !== null) ? resp : JSON.parse(resp);
+                } catch (e) {
+                    finish(false, 'HDRezka вернула не JSON: ' + responseHint(resp), 'error:bad_response');
+                    return;
+                }
+                if (json && json.success) {
+                    finish(true, 'Успешный вход' + (json.message ? ': ' + json.message : ''), 'logged');
+                } else {
+                    var msg = json && json.message ? String(json.message) : 'Сервер отклонил авторизацию';
+                    finish(false, 'Ответ HDRezka: ' + msg, 'error:login_rejected');
+                }
+            }, function (err, extra) {
+                var detail = responseHint(err || extra);
+                finish(false, 'Ошибка запроса авторизации: ' + detail, 'error:auth_request');
+            }, post, {
+                dataType: 'text',
+                headers: buildHeaders({ 'Content-Type': 'application/x-www-form-urlencoded' })
+            });
+        }
+
+        probe.timeout(15000);
+        probe.silent(proxify(domain + '/'), function (resp) {
+            var raw = typeof resp === 'string' ? resp : '';
+            if (/cloudflare|just a moment|checking your browser|captcha|verify you are human|проверка браузера|подтвердите, что вы не робот/i.test(raw)) {
+                finish(false, 'HDRezka открылась, но вернула антибот-проверку. Авторизация из Lampa сейчас заблокирована.', 'error:antibot');
+                return;
+            }
+            sendLogin();
+        }, function (err, extra) {
+            var detail = responseHint(err || extra);
+            finish(false, 'Lampa не может открыть ' + domain + '. Проверь домен или сетевой доступ. Детали: ' + detail, 'error:domain_unreachable');
+        }, false, {
+            dataType: 'text',
+            headers: buildHeaders({ 'X-Requested-With': '' })
+        });
     }
 
     function logout() {
