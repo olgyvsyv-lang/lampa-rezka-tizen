@@ -253,10 +253,10 @@
             if (!raw && value && typeof value === 'object') {
                 try { raw = JSON.stringify(value); } catch (e) {}
             }
-            var title = raw.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i);
+            var title = raw.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
             var clean = (title ? title[1] : raw.replace(/<[^>]*>/g, ' '))
                 .replace(/&nbsp;|&#160;/gi, ' ')
-                .replace(/\\s+/g, ' ').trim().slice(0, 150);
+                .replace(/\s+/g, ' ').trim().slice(0, 150);
             if (/cloudflare|just a moment|checking your browser|captcha|verify you are human|проверка браузера|подтвердите, что вы не робот/i.test(raw)) {
                 return 'Сайт показал проверку браузера/антибота';
             }
